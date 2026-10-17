@@ -145,8 +145,7 @@ function AILookup:buildUserPrompt(config, selection, before, after)
     )
 end
 
--- Solo hace red: se ejecuta en un subproceso (Kindle/PocketBook/Kobo) o,
--- en Android, directamente en primer plano. No debe tocar la UI.
+-- Solo hace red: se ejecuta en un subproceso, asi que no debe tocar la UI.
 function AILookup:queryModel(config, prompt)
     local request_body = {
         model = config.model,
@@ -259,25 +258,9 @@ function AILookup:lookup(reader_highlight)
         self:showResult(selection, result.text)
     end
 
-    if Device:isAndroid() then
-        -- En Android, fork() puede corromper el proceso padre de KOReader,
-        -- asi que hacemos la consulta en primer plano, sin subproceso.
-        local function run_on_android()
-            logger.dbg("AI Lookup (Android):", request_config.endpoint, request_config.model)
-            local message = InfoMessage:new{ text = _("Consulting the AI…") }
-            UIManager:show(message)
-            UIManager:forceRePaint()
-            local result = self:queryModel(request_config, prompt)
-            UIManager:close(message)
-            finish(result)
-        end
-        if NetworkMgr:willRerunWhenOnline(run_on_android) then
-            return
-        end
-        run_on_android()
-        return
-    end
-
+    -- La consulta se hace siempre en un subproceso (Trapper). Es importante
+    -- NO bloquear el hilo principal con la peticion de red: en Android eso
+    -- hace crashear el hilo de render (hwuiTask) del proceso.
     local function run()
         Trapper:wrap(function()
             logger.dbg("AI Lookup:", request_config.endpoint, request_config.model)

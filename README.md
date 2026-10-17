@@ -89,12 +89,9 @@ proveedor correspondiente.
 
 ## Notas
 
-- En Kindle, Kobo y PocketBook la respuesta se obtiene en segundo plano, así
-  que puedes cancelarla tocando la pantalla mientras aparece «Consulting the
-  AI…».
-- En **Android** la consulta se hace en primer plano (sin crear un subproceso)
-  para evitar un problema conocido de KOReader al usar `fork()`. Durante esos
-  segundos la interfaz muestra «Consulting the AI…» y no responde a toques.
+- La respuesta se obtiene en segundo plano (en un subproceso), así que la
+  interfaz sigue respondiendo y puedes cancelar la consulta tocando la pantalla
+  mientras aparece «Consulting the AI…».
 - Compatible con Kindle, Kobo, PocketBook y Android.
 - La API key se guarda en el dispositivo, en `settings/ai_lookup.lua`.
   No la compartas.
