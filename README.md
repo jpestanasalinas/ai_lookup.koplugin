@@ -20,18 +20,29 @@ una API key. También sirve cualquier proveedor con API compatible con OpenAI
 
 ## Instalación
 
-1. Copia la carpeta `ai_lookup.koplugin` entera dentro de la carpeta `plugins`
-   de KOReader:
+Como en cualquier otro plugin de KOReader: deja la carpeta `ai_lookup.koplugin`
+dentro de la carpeta `plugins` de KOReader (la que está junto a `reader.lua`).
+Después reinicia KOReader y, si hace falta, actívalo en
+**Herramientas → Gestión de complementos**.
 
-   - Kobo: `.adds/koreader/plugins/`
-   - Kindle: `koreader/plugins/`
-   - PocketBook: `applications/koreader/plugins/`
-   - Android: `koreader/plugins/`
+La ruta debe quedar así:
 
-   La ruta debe quedar como `.../plugins/ai_lookup.koplugin/main.lua`.
+```
+.../koreader/plugins/ai_lookup.koplugin/main.lua
+```
 
-2. Reinicia KOReader.
-3. Si hace falta, actívalo en **Herramientas → Gestión de complementos**.
+### Con git (recomendado)
+
+Desde la carpeta `plugins` de KOReader:
+
+```
+git clone https://github.com/jpestanasalinas/ai_lookup.koplugin.git
+```
+
+### Con ZIP
+
+Descarga el ZIP del repositorio y extrae la carpeta `ai_lookup.koplugin` en
+`plugins/`.
 
 ## Configuración (la forma más simple)
 
@@ -96,5 +107,6 @@ proveedor correspondiente.
 ai_lookup.koplugin/
 ├── _meta.lua                  # metadatos del plugin
 ├── main.lua                   # lógica del plugin
-└── configuration.lua.sample   # configuración opcional (copiar a configuration.lua)
+├── configuration.lua.sample   # configuración opcional (copiar a configuration.lua)
+└── README.md
 ```
