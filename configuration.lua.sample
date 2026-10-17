@@ -1,0 +1,25 @@
+--[[--
+Archivo de configuracion opcional para AI Lookup.
+
+Renombra este archivo a "configuration.lua" y rellena los valores que quieras.
+Es una alternativa al menu de KOReader (Search -> AI Lookup settings).
+Los ajustes guardados desde el menu tienen prioridad sobre este archivo.
+--]]
+
+return {
+    -- Obligatorio: tu API key. Nunca la compartas.
+    -- Groq (gratis): https://console.groq.com/keys
+    api_key = "",
+
+    -- Endpoint compatible con OpenAI.
+    endpoint = "https://api.groq.com/openai/v1/chat/completions",
+
+    -- Modelo a usar.
+    model = "llama-3.3-70b-versatile",
+
+    -- Idioma de la respuesta.
+    language = "Spanish",
+
+    -- Numero de palabras de contexto antes y despues de la seleccion.
+    context_words = 40,
+}
