@@ -360,22 +360,16 @@ function AILookup:addToMainMenu(menu_items)
                 text_func = function()
                     return T(_("Model: %1"), self:getConfig().model)
                 end,
-                sub_item_table = {
-                    {
-                        text = _("Choose from available models"),
-                        keep_menu_open = true,
-                        callback = function(touchmenu_instance)
-                            self:fetchAndChooseModel(touchmenu_instance)
-                        end,
-                    },
-                    {
-                        text = _("Enter model manually"),
-                        keep_menu_open = true,
-                        callback = function(touchmenu_instance)
-                            self:editSetting(_("Model"), "model", touchmenu_instance)
-                        end,
-                    },
-                },
+                callback = function(touchmenu_instance)
+                    self:editSetting(_("Model"), "model", touchmenu_instance)
+                end,
+            },
+            {
+                text = _("Choose model from available list"),
+                keep_menu_open = true,
+                callback = function(touchmenu_instance)
+                    self:fetchAndChooseModel(touchmenu_instance)
+                end,
             },
             {
                 text_func = function()
@@ -544,6 +538,7 @@ function AILookup:fetchModels(config)
 end
 
 function AILookup:fetchAndChooseModel(touchmenu_instance)
+    logger.warn("AI Lookup: fetchAndChooseModel called")
     local config = self:getConfig()
     if not config.api_key or config.api_key == "" then
         UIManager:show(InfoMessage:new{ text = _("Set your API key first.") })
@@ -551,7 +546,9 @@ function AILookup:fetchAndChooseModel(touchmenu_instance)
     end
 
     local function run()
+        logger.warn("AI Lookup: fetch run() started")
         Trapper:wrap(function()
+            logger.warn("AI Lookup: fetch wrapped start, online=", tostring(NetworkMgr:isOnline()))
             local completed, result = Trapper:dismissableRunInSubprocess(function()
                 local ok, res = xpcall(function()
                     return self:fetchModels(config)
@@ -565,6 +562,7 @@ function AILookup:fetchAndChooseModel(touchmenu_instance)
                 return res
             end, _("Fetching models…"))
 
+            logger.warn("AI Lookup: fetch subprocess done, completed=", tostring(completed), "result=", tostring(result and result.ok))
             if not completed then
                 return
             end
@@ -581,6 +579,7 @@ function AILookup:fetchAndChooseModel(touchmenu_instance)
     end
 
     if NetworkMgr:willRerunWhenOnline(run) then
+        logger.warn("AI Lookup: offline, will rerun when online")
         return
     end
     run()
