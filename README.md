@@ -59,7 +59,8 @@ Opcionalmente, desde el mismo menú puedes cambiar:
   entre los modelos disponibles para tu API key** (se consultan al proveedor) o
   escribirlo manualmente.
 - **API endpoint**: por defecto el de Groq.
-- **Answer language**: por defecto `Spanish`.
+- **Answer language**: por defecto `Spanish`. Puedes elegirlo de una lista de
+  idiomas comunes o escribirlo manualmente.
 - **Context words**: cuántas palabras de contexto se envían (por defecto 40).
 
 ### Alternativa: archivo de configuración

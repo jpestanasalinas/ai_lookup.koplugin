@@ -42,6 +42,16 @@ local DEFAULT_MODEL = "openai/gpt-oss-120b"
 local DEFAULT_LANGUAGE = "Spanish"
 local DEFAULT_CONTEXT_WORDS = 40
 
+-- Idiomas comunes ofrecidos en el selector de idioma de respuesta.
+local LANGUAGES = {
+    "English", "Spanish", "French", "German", "Italian", "Portuguese",
+    "Dutch", "Polish", "Russian", "Ukrainian", "Turkish", "Arabic",
+    "Chinese", "Japanese", "Korean", "Hindi", "Catalan", "Galician",
+    "Basque", "Swedish", "Norwegian", "Danish", "Finnish", "Czech",
+    "Greek", "Romanian", "Hungarian", "Hebrew", "Indonesian", "Vietnamese",
+    "Thai",
+}
+
 local REQUEST_BLOCK_TIMEOUT = 30
 local REQUEST_TOTAL_TIMEOUT = 90
 local MAX_ANSWER_CHARS = 4000
@@ -427,8 +437,9 @@ function AILookup:addToMainMenu(menu_items)
                 text_func = function()
                     return T(_("Answer language: %1"), self:getConfig().language)
                 end,
+                keep_menu_open = true,
                 callback = function(touchmenu_instance)
-                    self:editSetting(_("Answer language"), "language", touchmenu_instance)
+                    self:showLanguagePicker(touchmenu_instance)
                 end,
             },
             {
@@ -653,6 +664,41 @@ function AILookup:showModelPicker(models, touchmenu_instance)
     end
     picker = KeyValuePage:new{
         title = _("Choose a model"),
+        kv_pairs = kv_pairs,
+    }
+    UIManager:show(picker)
+end
+
+function AILookup:showLanguagePicker(touchmenu_instance)
+    local current = self:getConfig().language
+    local current_label = _("current")
+    local picker
+    local kv_pairs = {}
+    for _idx, lang in ipairs(LANGUAGES) do
+        table.insert(kv_pairs, {
+            lang,
+            lang == current and current_label or "",
+            callback = function()
+                self.settings:saveSetting("language", lang)
+                self.settings:flush()
+                UIManager:close(picker)
+                UIManager:show(InfoMessage:new{ text = T(_("Answer language set to %1."), lang) })
+                if touchmenu_instance then
+                    touchmenu_instance:updateItems()
+                end
+            end,
+        })
+    end
+    table.insert(kv_pairs, {
+        _("Other (type manually)"),
+        "",
+        callback = function()
+            UIManager:close(picker)
+            self:editSetting(_("Answer language"), "language", touchmenu_instance)
+        end,
+    })
+    picker = KeyValuePage:new{
+        title = _("Answer language"),
         kv_pairs = kv_pairs,
     }
     UIManager:show(picker)
