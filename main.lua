@@ -538,7 +538,6 @@ function AILookup:fetchModels(config)
 end
 
 function AILookup:fetchAndChooseModel(touchmenu_instance)
-    logger.warn("AI Lookup: fetchAndChooseModel called")
     local config = self:getConfig()
     if not config.api_key or config.api_key == "" then
         UIManager:show(InfoMessage:new{ text = _("Set your API key first.") })
@@ -546,40 +545,40 @@ function AILookup:fetchAndChooseModel(touchmenu_instance)
     end
 
     local function run()
-        logger.warn("AI Lookup: fetch run() started")
         Trapper:wrap(function()
-            logger.warn("AI Lookup: fetch wrapped start, online=", tostring(NetworkMgr:isOnline()))
-            local completed, result = Trapper:dismissableRunInSubprocess(function()
-                local ok, res = xpcall(function()
+            local ok, err = xpcall(function()
+                local completed, result = Trapper:dismissableRunInSubprocess(function()
                     return self:fetchModels(config)
-                end, function(err)
-                    logger.warn("AI Lookup fetch models error:", err, debug.traceback("", 2))
-                    return tostring(err)
-                end)
-                if not ok then
-                    return { ok = false, error = res }
-                end
-                return res
-            end, _("Fetching models…"))
+                end, _("Fetching models…"))
 
-            logger.warn("AI Lookup: fetch subprocess done, completed=", tostring(completed), "result=", tostring(result and result.ok))
-            if not completed then
-                return
+                if not completed then
+                    return
+                end
+                if type(result) ~= "table" then
+                    UIManager:show(InfoMessage:new{
+                        text = _("Could not fetch the model list (no response from the subprocess)."),
+                    })
+                    return
+                end
+                if not result.ok then
+                    UIManager:show(InfoMessage:new{
+                        text = T(_("Could not fetch models:\n%1"), tostring(result.error or "unknown error")),
+                    })
+                    return
+                end
+                self:showModelPicker(result.models, touchmenu_instance)
+            end, debug.traceback)
+
+            if not ok then
+                logger.warn("AI Lookup fetch error:", err)
+                UIManager:show(InfoMessage:new{
+                    text = T(_("AI Lookup error:\n%1"), tostring(err)),
+                })
             end
-            if result == nil then
-                UIManager:show(InfoMessage:new{ text = _("Could not fetch the model list.") })
-                return
-            end
-            if not result.ok then
-                UIManager:show(InfoMessage:new{ text = T(_("Could not fetch models:\n%1"), result.error) })
-                return
-            end
-            self:showModelPicker(result.models, touchmenu_instance)
         end)
     end
 
     if NetworkMgr:willRerunWhenOnline(run) then
-        logger.warn("AI Lookup: offline, will rerun when online")
         return
     end
     run()
