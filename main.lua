@@ -65,6 +65,28 @@ local function is_usable_chat_model(id)
     return true
 end
 
+-- Quita el formato Markdown que algunos modelos devuelven aunque se les pida
+-- texto plano, para que no salgan asteriscos o almohadillas literales.
+local function strip_markdown(text)
+    if not text then
+        return text
+    end
+    text = text:gsub("```[%w]*\n?", "")
+    text = text:gsub("```", "")
+    text = text:gsub("`(.-)`", "%1")
+    -- Encabezados al inicio de linea
+    text = text:gsub("\n#+%s*", "\n")
+    text = text:gsub("^#+%s*", "")
+    -- Vinetas de lista -> punto medio
+    text = text:gsub("\n%s*[%*%-]%s+", "\n• ")
+    text = text:gsub("^%s*[%*%-]%s+", "• ")
+    -- Negrita y cursiva
+    text = text:gsub("%*%*(.-)%*%*", "%1")
+    text = text:gsub("__(.-)__", "%1")
+    text = text:gsub("%*(.-)%*", "%1")
+    return text
+end
+
 local AILookup = WidgetContainer:extend{
     name = "ai_lookup",
     is_doc_only = true,
@@ -171,7 +193,10 @@ function AILookup:queryModel(config, prompt)
         messages = {
             {
                 role = "system",
-                content = "You are a helpful reading assistant and dictionary. Answer clearly and concisely.",
+                content = "You are a helpful reading assistant and dictionary. "
+                    .. "Answer in plain text only: do not use Markdown or any formatting "
+                    .. "syntax (no asterisks, hashes, underscores or backticks). "
+                    .. "Answer clearly and concisely.",
             },
             {
                 role = "user",
@@ -326,6 +351,7 @@ function AILookup:lookup(reader_highlight)
 end
 
 function AILookup:showResult(selection, text)
+    text = strip_markdown(text)
     if #text > MAX_ANSWER_CHARS then
         text = text:sub(1, MAX_ANSWER_CHARS) .. "…"
     end
