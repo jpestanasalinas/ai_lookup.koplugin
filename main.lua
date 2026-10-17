@@ -47,6 +47,24 @@ local REQUEST_TOTAL_TIMEOUT = 90
 local MAX_ANSWER_CHARS = 4000
 local MAX_CONTEXT_CHARS = 1500
 
+-- Filtro por nombre para la lista de modelos: la API no expone si un modelo
+-- es de pago, de audio o preview, asi que descartamos los que no son modelos
+-- de chat (audio, moderacion, embeddings, guard, preview, etc.).
+local MODEL_ID_DENYLIST = {
+    "whisper", "tts", "orpheus", "guard", "embed", "moderation",
+    "safeguard", "speech", "rerank", "preview", "audio", "canary",
+}
+
+local function is_usable_chat_model(id)
+    local lower = id:lower()
+    for _, word in ipairs(MODEL_ID_DENYLIST) do
+        if lower:find(word, 1, true) then
+            return false
+        end
+    end
+    return true
+end
+
 local AILookup = WidgetContainer:extend{
     name = "ai_lookup",
     is_doc_only = true,
@@ -527,7 +545,10 @@ function AILookup:fetchModels(config)
     local ids = {}
     for _, entry in ipairs(decoded.data) do
         if type(entry) == "table" and entry.id then
-            table.insert(ids, tostring(entry.id))
+            local id = tostring(entry.id)
+            if is_usable_chat_model(id) then
+                table.insert(ids, id)
+            end
         end
     end
     table.sort(ids)
