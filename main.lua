@@ -17,6 +17,7 @@ local DataStorage = require("datastorage")
 local Device = require("device")
 local InfoMessage = require("ui/widget/infomessage")
 local InputDialog = require("ui/widget/inputdialog")
+local KeyValuePage = require("ui/widget/keyvaluepage")
 local LuaSettings = require("luasettings")
 local NetworkMgr = require("ui/network/manager")
 local SpinWidget = require("ui/widget/spinwidget")
@@ -37,7 +38,7 @@ local T = require("ffi/util").template
 
 -- Valores por defecto: Groq es gratuito y solo requiere pegar una API key.
 local DEFAULT_ENDPOINT = "https://api.groq.com/openai/v1/chat/completions"
-local DEFAULT_MODEL = "llama-3.3-70b-versatile"
+local DEFAULT_MODEL = "openai/gpt-oss-120b"
 local DEFAULT_LANGUAGE = "Spanish"
 local DEFAULT_CONTEXT_WORDS = 40
 
@@ -359,9 +360,22 @@ function AILookup:addToMainMenu(menu_items)
                 text_func = function()
                     return T(_("Model: %1"), self:getConfig().model)
                 end,
-                callback = function(touchmenu_instance)
-                    self:editSetting(_("Model"), "model", touchmenu_instance)
-                end,
+                sub_item_table = {
+                    {
+                        text = _("Choose from available models"),
+                        keep_menu_open = true,
+                        callback = function(touchmenu_instance)
+                            self:fetchAndChooseModel(touchmenu_instance)
+                        end,
+                    },
+                    {
+                        text = _("Enter model manually"),
+                        keep_menu_open = true,
+                        callback = function(touchmenu_instance)
+                            self:editSetting(_("Model"), "model", touchmenu_instance)
+                        end,
+                    },
+                },
             },
             {
                 text_func = function()
@@ -464,6 +478,138 @@ function AILookup:editContextWords(touchmenu_instance)
             end
         end,
     })
+end
+
+--==========================================================================
+-- Lista de modelos disponibles (GET <base>/models, compatible con OpenAI)
+--==========================================================================
+
+function AILookup:getModelsUrl(endpoint)
+    local base = endpoint:gsub("/chat/completions/*$", "")
+    if base == endpoint then
+        base = endpoint:gsub("/*$", "")
+    end
+    return base .. "/models"
+end
+
+function AILookup:fetchModels(config)
+    local url = self:getModelsUrl(config.endpoint)
+    local sink = {}
+    socketutil:set_timeout(REQUEST_BLOCK_TIMEOUT, REQUEST_TOTAL_TIMEOUT)
+    local request = {
+        url = url,
+        method = "GET",
+        headers = { ["Authorization"] = "Bearer " .. config.api_key },
+        sink = socketutil.table_sink(sink),
+    }
+    local client = url:lower():sub(1, 7) == "http://" and http.request or https.request
+
+    local ok_request, code, headers, status = pcall(function()
+        return socket.skip(1, client(request))
+    end)
+    socketutil:reset_timeout()
+
+    if not ok_request then
+        return { ok = false, error = tostring(code) }
+    end
+    if headers == nil then
+        return { ok = false, error = tostring(status or code or _("network unreachable")) }
+    end
+    if code ~= 200 then
+        local body = table.concat(sink)
+        if #body > 600 then
+            body = body:sub(1, 600) .. "…"
+        end
+        logger.warn("AI Lookup models HTTP error:", tostring(code), body)
+        return { ok = false, error = T(_("The server returned HTTP %1.\n%2"), tostring(code), body) }
+    end
+
+    local content = table.concat(sink)
+    local ok_decode, decoded = pcall(json.decode, content)
+    if not ok_decode or type(decoded) ~= "table" or type(decoded.data) ~= "table" then
+        return { ok = false, error = _("Could not parse the model list.") }
+    end
+
+    local ids = {}
+    for _, entry in ipairs(decoded.data) do
+        if type(entry) == "table" and entry.id then
+            table.insert(ids, tostring(entry.id))
+        end
+    end
+    table.sort(ids)
+    if #ids == 0 then
+        return { ok = false, error = _("No models available for this API key.") }
+    end
+    return { ok = true, models = ids }
+end
+
+function AILookup:fetchAndChooseModel(touchmenu_instance)
+    local config = self:getConfig()
+    if not config.api_key or config.api_key == "" then
+        UIManager:show(InfoMessage:new{ text = _("Set your API key first.") })
+        return
+    end
+
+    local function run()
+        Trapper:wrap(function()
+            local completed, result = Trapper:dismissableRunInSubprocess(function()
+                local ok, res = xpcall(function()
+                    return self:fetchModels(config)
+                end, function(err)
+                    logger.warn("AI Lookup fetch models error:", err, debug.traceback("", 2))
+                    return tostring(err)
+                end)
+                if not ok then
+                    return { ok = false, error = res }
+                end
+                return res
+            end, _("Fetching models…"))
+
+            if not completed then
+                return
+            end
+            if result == nil then
+                UIManager:show(InfoMessage:new{ text = _("Could not fetch the model list.") })
+                return
+            end
+            if not result.ok then
+                UIManager:show(InfoMessage:new{ text = T(_("Could not fetch models:\n%1"), result.error) })
+                return
+            end
+            self:showModelPicker(result.models, touchmenu_instance)
+        end)
+    end
+
+    if NetworkMgr:willRerunWhenOnline(run) then
+        return
+    end
+    run()
+end
+
+function AILookup:showModelPicker(models, touchmenu_instance)
+    local current = self:getConfig().model
+    local picker
+    local kv_pairs = {}
+    for _, model in ipairs(models) do
+        table.insert(kv_pairs, {
+            model,
+            model == current and _("current") or "",
+            callback = function()
+                self.settings:saveSetting("model", model)
+                self.settings:flush()
+                UIManager:close(picker)
+                UIManager:show(InfoMessage:new{ text = T(_("Model set to %1."), model) })
+                if touchmenu_instance then
+                    touchmenu_instance:updateItems()
+                end
+            end,
+        })
+    end
+    picker = KeyValuePage:new{
+        title = _("Choose a model"),
+        kv_pairs = kv_pairs,
+    }
+    UIManager:show(picker)
 end
 
 return AILookup

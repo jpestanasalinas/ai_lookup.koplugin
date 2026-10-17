@@ -54,7 +54,10 @@ Descarga el ZIP del repositorio y extrae la carpeta `ai_lookup.koplugin` en
 
 Opcionalmente, desde el mismo menú puedes cambiar:
 
-- **Model**: por defecto `llama-3.3-70b-versatile`.
+- **Model**: por defecto `openai/gpt-oss-120b` (Groq retiró
+  `llama-3.3-70b-versatile` el 2026-08-16). Desde este menú puedes **elegir
+  entre los modelos disponibles para tu API key** (se consultan al proveedor) o
+  escribirlo manualmente.
 - **API endpoint**: por defecto el de Groq.
 - **Answer language**: por defecto `Spanish`.
 - **Context words**: cuántas palabras de contexto se envían (por defecto 40).
