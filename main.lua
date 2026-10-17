@@ -196,10 +196,20 @@ function AILookup:queryModel(config, prompt)
         return { ok = false, error = tostring(status or code or _("network unreachable")) }
     end
     if code ~= 200 then
-        local reason = socketutil.describe_error(code, REQUEST_BLOCK_TIMEOUT, REQUEST_TOTAL_TIMEOUT)
+        local body = table.concat(sink)
+        if #body > 600 then
+            body = body:sub(1, 600) .. "…"
+        end
+        -- socketutil.describe_error no existe en todas las versiones de KOReader.
+        local reason
+        if socketutil.describe_error then
+            reason = socketutil.describe_error(code, REQUEST_BLOCK_TIMEOUT, REQUEST_TOTAL_TIMEOUT)
+        end
+        local detail = body ~= "" and body or (reason or tostring(status or ""))
+        logger.warn("AI Lookup HTTP error:", tostring(code), body)
         return {
             ok = false,
-            error = T(_("The server returned HTTP %1 (%2)."), tostring(code), reason or tostring(status or "")),
+            error = T(_("The server returned HTTP %1.\n%2"), tostring(code), detail),
         }
     end
 
