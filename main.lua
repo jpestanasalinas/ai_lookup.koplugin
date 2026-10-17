@@ -265,11 +265,25 @@ function AILookup:lookup(reader_highlight)
         Trapper:wrap(function()
             logger.dbg("AI Lookup:", request_config.endpoint, request_config.model)
             local completed, result = Trapper:dismissableRunInSubprocess(function()
-                return self:queryModel(request_config, prompt)
+                local query_ok, res = xpcall(function()
+                    return self:queryModel(request_config, prompt)
+                end, function(err)
+                    logger.warn("AI Lookup query error:", err, debug.traceback("", 2))
+                    return tostring(err)
+                end)
+                if not query_ok then
+                    return { ok = false, error = res }
+                end
+                return res
             end, _("Consulting the AI…"))
 
             if not completed then
                 UIManager:show(InfoMessage:new{ text = _("Consultation interrupted.") })
+                return
+            end
+            if result == nil then
+                logger.warn("AI Lookup: the subprocess did not return a result")
+                UIManager:show(InfoMessage:new{ text = _("Could not get an answer: the consultation failed.") })
                 return
             end
             finish(result)
