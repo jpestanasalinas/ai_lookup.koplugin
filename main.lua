@@ -586,12 +586,13 @@ end
 
 function AILookup:showModelPicker(models, touchmenu_instance)
     local current = self:getConfig().model
+    local current_label = _("current")
     local picker
     local kv_pairs = {}
-    for _, model in ipairs(models) do
+    for _idx, model in ipairs(models) do
         table.insert(kv_pairs, {
             model,
-            model == current and _("current") or "",
+            model == current and current_label or "",
             callback = function()
                 self.settings:saveSetting("model", model)
                 self.settings:flush()
