@@ -36,6 +36,7 @@ local socket = require("socket")
 local socketutil = require("socketutil")
 local util = require("util")
 local Updater = require("updater")
+local Utf8Proc = require("ffi/utf8proc")
 local _ = require("gettext")
 local T = require("ffi/util").template
 
@@ -98,6 +99,39 @@ local function strip_markdown(text)
     text = text:gsub("__(.-)__", "%1")
     text = text:gsub("%*(.-)%*", "%1")
     return text
+end
+
+-- Devuelve la longitud en bytes del primer caracter UTF-8 de la cadena.
+local function first_char_len(s)
+    local b = s:byte(1)
+    if not b then
+        return 0
+    end
+    if b >= 0xF0 then
+        return 4
+    elseif b >= 0xE0 then
+        return 3
+    elseif b >= 0xC0 then
+        return 2
+    end
+    return 1
+end
+
+-- Pone en mayuscula la primera letra de la seleccion (seguro en UTF-8).
+local function capitalize_first(text)
+    if not text or text == "" then
+        return text
+    end
+    local len = first_char_len(text)
+    local first = text:sub(1, len)
+    local rest = text:sub(len + 1)
+    local upper
+    if Utf8Proc and Utf8Proc.uppercase_dumb then
+        upper = Utf8Proc.uppercase_dumb(first)
+    else
+        upper = first:upper() -- respaldo solo ASCII
+    end
+    return upper .. rest
 end
 
 local AILookup = WidgetContainer:extend{
@@ -383,7 +417,7 @@ function AILookup:showResult(selection, text)
     end
 
     UIManager:show(TextViewer:new{
-        title = _("AI Lookup") .. ": " .. selection,
+        title = _("AI Lookup") .. ": " .. capitalize_first(selection),
         title_multilines = true,
         text = text,
         justified = true,
