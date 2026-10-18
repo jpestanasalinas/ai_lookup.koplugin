@@ -13,6 +13,7 @@ menu para usar Gemini, OpenRouter u otro proveedor compatible.
 @module koplugin.ai_lookup
 --]]
 
+local ConfirmBox = require("ui/widget/confirmbox")
 local DataStorage = require("datastorage")
 local Device = require("device")
 local InfoMessage = require("ui/widget/infomessage")
@@ -28,11 +29,13 @@ local WidgetContainer = require("ui/widget/container/widgetcontainer")
 local http = require("socket.http")
 local https = require("ssl.https")
 local json = require("json")
+local lfs = require("libs/libkoreader-lfs")
 local ltn12 = require("ltn12")
 local logger = require("logger")
 local socket = require("socket")
 local socketutil = require("socketutil")
 local util = require("util")
+local Updater = require("updater")
 local _ = require("gettext")
 local T = require("ffi/util").template
 
@@ -461,6 +464,19 @@ function AILookup:addToMainMenu(menu_items)
                 end,
             },
             {
+                text_func = function()
+                    local version = self:getLocalVersion()
+                    if version then
+                        return T(_("Check for updates (v%1)"), version)
+                    end
+                    return _("Check for updates")
+                end,
+                separator = true,
+                callback = function()
+                    self:checkForUpdates()
+                end,
+            },
+            {
                 text = _("Restore default settings"),
                 callback = function(touchmenu_instance)
                     self.settings:reset()
@@ -702,6 +718,131 @@ function AILookup:showLanguagePicker(touchmenu_instance)
         kv_pairs = kv_pairs,
     }
     UIManager:show(picker)
+end
+
+--==========================================================================
+-- Actualizaciones
+--==========================================================================
+
+function AILookup:getLocalVersion()
+    if not self.path then
+        return nil
+    end
+    return Updater:readVersion(self.path)
+end
+
+function AILookup:checkForUpdates()
+    if not self.path then
+        UIManager:show(InfoMessage:new{ text = _("Could not determine the plugin folder.") })
+        return
+    end
+
+    -- Las instalaciones por git se actualizan con "git pull": reemplazar la
+    -- carpeta destruiria el repositorio.
+    if lfs.attributes(self.path .. "/.git", "mode") == "directory" then
+        UIManager:show(InfoMessage:new{
+            text = _("This plugin was installed with git.\nUpdate it by running \"git pull\" from the plugin folder.\nAutomatic updates are disabled for git installs."),
+        })
+        return
+    end
+
+    local local_version = self:getLocalVersion()
+
+    local function run()
+        Trapper:wrap(function()
+            local completed, result = Trapper:dismissableRunInSubprocess(function()
+                local query_ok, tag, err = pcall(function()
+                    return Updater:getLatestTag()
+                end)
+                if not query_ok then
+                    return { ok = false, error = tostring(tag) }
+                end
+                if not tag then
+                    return { ok = false, error = err or _("Could not check for updates.") }
+                end
+                return { ok = true, tag = tag }
+            end, _("Checking for updates…"))
+
+            if not completed then
+                return
+            end
+            if type(result) ~= "table" then
+                UIManager:show(InfoMessage:new{ text = _("Could not check for updates (no response from the subprocess).") })
+                return
+            end
+            if not result.ok then
+                UIManager:show(InfoMessage:new{
+                    text = T(_("Could not check for updates:\n%1"), tostring(result.error)),
+                })
+                return
+            end
+
+            local latest = Updater:normalizeVersion(result.tag)
+            if not local_version or Updater:compareVersions(latest, local_version) <= 0 then
+                UIManager:show(InfoMessage:new{
+                    text = T(_("You already have the latest version (v%1)."), tostring(local_version or "?")),
+                })
+                return
+            end
+
+            UIManager:show(ConfirmBox:new{
+                text = T(_("A new version is available.\n\nInstalled: v%1\nAvailable: v%2\n\nUpdate now?"),
+                    tostring(local_version), tostring(latest)),
+                ok_text = _("Update"),
+                ok_callback = function()
+                    self:performUpdate(result.tag)
+                end,
+            })
+        end)
+    end
+
+    if NetworkMgr:willRerunWhenOnline(run) then
+        return
+    end
+    run()
+end
+
+function AILookup:performUpdate(tag)
+    local plugin_path = self.path
+
+    local function run()
+        Trapper:wrap(function()
+            local completed, result = Trapper:dismissableRunInSubprocess(function()
+                local ok, res = pcall(function()
+                    return Updater:installUpdate(plugin_path, tag)
+                end)
+                if not ok then
+                    return { ok = false, error = tostring(res) }
+                end
+                return res
+            end, _("Downloading and installing the update…"))
+
+            if not completed then
+                UIManager:show(InfoMessage:new{ text = _("Update interrupted.") })
+                return
+            end
+            if type(result) ~= "table" then
+                UIManager:show(InfoMessage:new{ text = _("The update failed (no response from the subprocess).") })
+                return
+            end
+            if not result.ok then
+                UIManager:show(InfoMessage:new{
+                    text = T(_("The update failed:\n%1"), tostring(result.error)),
+                })
+                return
+            end
+
+            UIManager:askForRestart(
+                T(_("AI Lookup updated to v%1.\n\nPlease restart KOReader to apply the changes."),
+                    tostring(result.version or Updater:normalizeVersion(tag)))
+            )
+        end)
+    end
+
+    if NetworkMgr:willRerunWhenOnline(run) then
+        return
+    end
+    run()
 end
 
 return AILookup

@@ -77,6 +77,23 @@ tienen prioridad sobre este archivo.
 3. En el menú que aparece pulsa **AI Lookup**.
 4. Espera unos segundos: verás la respuesta. Puedes copiarla con **Copy**.
 
+## Actualización desde el propio dispositivo
+
+El plugin puede actualizarse solo, sin conectar el dispositivo al ordenador:
+
+1. Abre **Buscar → AI Lookup settings → Check for updates (v…)**.
+2. Si hay una versión nueva, confirma **Update**. Se descarga e instala sola.
+3. Reinicia KOReader cuando te lo pida.
+
+La versión instalada es la que aparece en el propio menú. La comprobación es
+manual: nunca se conecta a internet por su cuenta.
+
+- La actualización conserva tu archivo `configuration.lua` (la API key).
+- **Si instalaste el plugin con `git clone`**, actualiza con `git pull` desde la
+  carpeta del plugin; la actualización automática está desactivada en ese caso
+  para no borrar el repositorio.
+- Si algo falla durante la instalación, el plugin restaura la versión anterior.
+
 ## Otros proveedores gratuitos (compatible con OpenAI)
 
 - **Google Gemini** (nivel gratuito):
@@ -108,6 +125,7 @@ proveedor correspondiente.
 ai_lookup.koplugin/
 ├── _meta.lua                  # metadatos del plugin
 ├── main.lua                   # lógica del plugin
+├── updater.lua                # actualización desde el dispositivo
 ├── configuration.lua.sample   # configuración opcional (copiar a configuration.lua)
 └── README.md
 ```
