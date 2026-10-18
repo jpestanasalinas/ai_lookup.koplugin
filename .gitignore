@@ -3,3 +3,8 @@ configuration.lua
 
 # Helper local de desarrollo (lanzador del emulador en WSL): no se sube.
 run_koreader.bat
+
+# Archivos temporales de editores (p. ej. swap de Vim): pueden contener la API key.
+*.swp
+*.swo
+*~
