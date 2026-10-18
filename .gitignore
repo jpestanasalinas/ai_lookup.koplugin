@@ -1,2 +1,5 @@
 # Configuración local del usuario (contiene la API key): no se sube.
 configuration.lua
+
+# Helper local de desarrollo (lanzador del emulador en WSL): no se sube.
+run_koreader.bat
