@@ -61,6 +61,9 @@ Opcionalmente, desde el mismo menú puedes cambiar:
 - **API endpoint**: por defecto el de Groq.
 - **Answer language**: por defecto `Spanish`. Puedes elegirlo de una lista de
   idiomas comunes o escribirlo manualmente.
+- **Answer style**: `Dictionary` (por defecto) pide la respuesta con forma de
+  entrada de diccionario; `Explanation` recupera el estilo anterior (una
+  explicación general y otra del contexto). Pulsa el botón para alternar.
 - **Context words**: cuántas palabras de contexto se envían (por defecto 40).
 
 ### Alternativa: archivo de configuración
@@ -76,6 +79,25 @@ tienen prioridad sobre este archivo.
    «Diccionario con selección de una palabra», tendrás que arrastrar un poco).
 3. En el menú que aparece pulsa **AI Lookup**.
 4. Espera unos segundos: verás la respuesta. Puedes copiarla con **Copy**.
+
+### Estilo de diccionario
+
+Con el estilo `Dictionary` (por defecto) la respuesta se muestra como una
+entrada de diccionario, con el término y las etiquetas en **negrita**, el
+ejemplo en *cursiva* y las listas con viñetas, todo renderizado de forma nativa
+por KOReader (no verás asteriscos sueltos):
+
+```
+**palabra**
+- Definición: ...
+- Categoría gramatical: sustantivo femenino
+- Etimología / Origen: ...
+- Ejemplo: "..."
+- Sinónimos: ...
+- Sentido en este contexto: ...
+```
+
+El botón **Copy** copia el texto ya limpio, sin marcas de formato.
 
 ## Actualización desde el propio dispositivo
 

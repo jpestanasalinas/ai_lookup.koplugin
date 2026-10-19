@@ -45,6 +45,9 @@ local DEFAULT_ENDPOINT = "https://api.groq.com/openai/v1/chat/completions"
 local DEFAULT_MODEL = "openai/gpt-oss-120b"
 local DEFAULT_LANGUAGE = "Spanish"
 local DEFAULT_CONTEXT_WORDS = 40
+-- Estilo de la respuesta: "dictionary" (entrada de diccionario) o
+-- "explanation" (explicacion general + contextual, comportamiento original).
+local DEFAULT_ANSWER_STYLE = "dictionary"
 
 -- Idiomas comunes ofrecidos en el selector de idioma de respuesta.
 local LANGUAGES = {
@@ -54,6 +57,46 @@ local LANGUAGES = {
     "Basque", "Swedish", "Norwegian", "Danish", "Finnish", "Czech",
     "Greek", "Romanian", "Hungarian", "Hebrew", "Indonesian", "Vietnamese",
     "Thai",
+}
+
+-- Etiquetas de los campos de la entrada de diccionario, en el orden:
+-- categoria gramatical, etimologia, definicion, sentido en contexto,
+-- sinonimos y ejemplo. Se usan para construir el esqueleto del prompt en el
+-- idioma de respuesta: asi el modelo no tiene que traducir los nombres de los
+-- campos (los copia tal cual) y nunca los deja en ingles. Si el idioma no esta
+-- en la tabla se usan las etiquetas en ingles.
+local DICTIONARY_LABELS = {
+    English = { "Part of speech", "Etymology / origin", "Definition", "Meaning in this context", "Synonyms", "Example" },
+    Spanish = { "Categoría gramatical", "Etimología / Origen", "Definición", "Sentido en este contexto", "Sinónimos", "Ejemplo" },
+    French = { "Catégorie grammaticale", "Étymologie", "Définition", "Sens dans ce contexte", "Synonymes", "Exemple" },
+    German = { "Wortart", "Etymologie", "Definition", "Bedeutung in diesem Kontext", "Synonyme", "Beispiel" },
+    Italian = { "Categoria grammaticale", "Etimologia", "Definizione", "Significato in questo contesto", "Sinonimi", "Esempio" },
+    Portuguese = { "Classe gramatical", "Etimologia", "Definição", "Sentido neste contexto", "Sinônimos", "Exemplo" },
+    Dutch = { "Woordsoort", "Etymologie", "Definitie", "Betekenis in deze context", "Synoniemen", "Voorbeeld" },
+    Polish = { "Część mowy", "Etymologia", "Definicja", "Znaczenie w tym kontekście", "Synonimy", "Przykład" },
+    Russian = { "Часть речи", "Этимология", "Определение", "Значение в этом контексте", "Синонимы", "Пример" },
+    Ukrainian = { "Частина мови", "Етимологія", "Визначення", "Значення в цьому контексті", "Синоніми", "Приклад" },
+    Turkish = { "Sözcük türü", "Etimoloji", "Tanım", "Bu bağlamdaki anlamı", "Eş anlamlılar", "Örnek" },
+    Arabic = { "نوع الكلمة", "أصل الكلمة", "التعريف", "المعنى في هذا السياق", "المترادفات", "مثال" },
+    Chinese = { "词类", "词源", "释义", "在上下文中的含义", "同义词", "例句" },
+    Japanese = { "品詞", "語源", "定義", "この文脈での意味", "類義語", "例文" },
+    Korean = { "품사", "어원", "정의", "이 문맥에서의 의미", "동의어", "예문" },
+    Hindi = { "शब्द-वर्ग", "व्युत्पत्ति", "परिभाषा", "इस संदर्भ में अर्थ", "पर्यायवाची", "उदाहरण" },
+    Catalan = { "Categoria gramatical", "Etimologia", "Definició", "Sentit en aquest context", "Sinònims", "Exemple" },
+    Galician = { "Categoría gramatical", "Etimoloxía", "Definición", "Sentido neste contexto", "Sinónimos", "Exemplo" },
+    Basque = { "Hitz klasea", "Etimologia", "Definizioa", "Testuinguru honetako esanahia", "Sinonimoak", "Adibidea" },
+    Swedish = { "Ordklass", "Etymologi", "Definition", "Betydelse i detta sammanhang", "Synonymer", "Exempel" },
+    Norwegian = { "Ordklasse", "Etymologi", "Definisjon", "Betydning i denne konteksten", "Synonymer", "Eksempel" },
+    Danish = { "Ordklasse", "Etymologi", "Definition", "Betydning i denne kontekst", "Synonymer", "Eksempel" },
+    Finnish = { "Sanaluokka", "Etymologia", "Määritelmä", "Merkitys tässä yhteydessä", "Synonyymit", "Esimerkki" },
+    Czech = { "Slovní druh", "Etymologie", "Definice", "Význam v tomto kontextu", "Synonyma", "Příklad" },
+    Greek = { "Μέρος του λόγου", "Ετυμολογία", "Ορισμός", "Σημασία σε αυτό το πλαίσιο", "Συνώνυμα", "Παράδειγμα" },
+    Romanian = { "Parte de vorbire", "Etimologie", "Definiție", "Sensul în acest context", "Sinonime", "Exemplu" },
+    Hungarian = { "Szófaj", "Etimológia", "Meghatározás", "Jelentés ebben a kontextusban", "Szinonimák", "Példa" },
+    Hebrew = { "חלק דיבר", "אטימולוגיה", "הגדרה", "משמעות בהקשר זה", "מילים נרדפות", "דוגמה" },
+    Indonesian = { "Kelas kata", "Etimologi", "Definisi", "Makna dalam konteks ini", "Sinonim", "Contoh" },
+    Vietnamese = { "Từ loại", "Từ nguyên", "Định nghĩa", "Nghĩa trong ngữ cảnh này", "Từ đồng nghĩa", "Ví dụ" },
+    Thai = { "ชนิดของคำ", "รากศัพท์", "ความหมาย", "ความหมายในบริบทนี้", "คำพ้องความหมาย", "ตัวอย่าง" },
 }
 
 local REQUEST_BLOCK_TIMEOUT = 30
@@ -79,12 +122,13 @@ local function is_usable_chat_model(id)
     return true
 end
 
--- Quita el formato Markdown que algunos modelos devuelven aunque se les pida
--- texto plano, para que no salgan asteriscos o almohadillas literales.
-local function strip_markdown(text)
+-- Convierte la respuesta Markdown del modelo a texto plano: se usa para el
+-- boton "Copy" (para que se copie texto legible, sin asteriscos ni etiquetas).
+local function markdown_to_plain(text)
     if not text then
         return text
     end
+    text = text:gsub("\r\n", "\n"):gsub("\r", "\n")
     text = text:gsub("```[%w]*\n?", "")
     text = text:gsub("```", "")
     text = text:gsub("`(.-)`", "%1")
@@ -99,6 +143,69 @@ local function strip_markdown(text)
     text = text:gsub("__(.-)__", "%1")
     text = text:gsub("%*(.-)%*", "%1")
     return text
+end
+
+-- Escapa los caracteres con significado en HTML para no inyectar etiquetas
+-- procedentes del modelo (solo anadimos despues las que controlamos nosotros).
+local function escape_html(text)
+    text = text:gsub("&", "&amp;")
+    text = text:gsub("<", "&lt;")
+    text = text:gsub(">", "&gt;")
+    return text
+end
+
+-- Solo negrita y cursiva. Se aplica despues de escapar HTML y en este orden
+-- (negrita antes que cursiva) para que "**x**" no se confunda con "*x*".
+local function apply_inline_markup(text)
+    text = text:gsub("%*%*(.-)%*%*", "<b>%1</b>")
+    text = text:gsub("%*(.-)%*", "<i>%1</i>")
+    return text
+end
+
+-- Convierte la respuesta Markdown del modelo a HTML restringido (negrita,
+-- cursiva y listas), que es lo que KOReader sabe renderizar en el TextViewer
+-- (text_format = "html"). Cualquier otra sintaxis se deja como texto.
+local function markdown_to_html(text)
+    if not text then
+        return text
+    end
+    text = text:gsub("\r\n", "\n"):gsub("\r", "\n")
+    text = text:gsub("```[%w]*\n?", "")
+    text = text:gsub("```", "")
+    text = text:gsub("`(.-)`", "%1")
+    text = escape_html(text)
+
+    local out = {}
+    local in_list = false
+    for line in (text .. "\n"):gmatch("(.-)\n") do
+        local list_item = line:match("^%s*[%-%*]%s+(.*)$")
+        local heading = line:match("^%s*#+%s*(.*)$")
+        if heading and heading ~= "" then
+            if in_list then
+                out[#out + 1] = "</ul>"
+                in_list = false
+            end
+            out[#out + 1] = "<b>" .. apply_inline_markup(heading) .. "</b>"
+        elseif list_item then
+            if not in_list then
+                out[#out + 1] = "<ul>"
+                in_list = true
+            end
+            out[#out + 1] = "<li>" .. apply_inline_markup(list_item) .. "</li>"
+        else
+            if in_list then
+                out[#out + 1] = "</ul>"
+                in_list = false
+            end
+            if line ~= "" then
+                out[#out + 1] = apply_inline_markup(line) .. "<br/>"
+            end
+        end
+    end
+    if in_list then
+        out[#out + 1] = "</ul>"
+    end
+    return table.concat(out, "\n")
 end
 
 -- Devuelve la longitud en bytes del primer caracter UTF-8 de la cadena.
@@ -194,6 +301,7 @@ function AILookup:getConfig()
         model = pick("model", DEFAULT_MODEL),
         language = pick("language", DEFAULT_LANGUAGE),
         context_words = pick("context_words", DEFAULT_CONTEXT_WORDS),
+        answer_style = pick("answer_style", DEFAULT_ANSWER_STYLE),
     }
 end
 
@@ -222,13 +330,44 @@ function AILookup:buildUserPrompt(config, selection, before, after)
     if #context > MAX_CONTEXT_CHARS then
         context = context:sub(1, MAX_CONTEXT_CHARS) .. "…"
     end
+
+    if config.answer_style == "explanation" then
+        return T(
+            "%1Selected word or phrase: \"%2\"\n" ..
+            "Context where it appears in the book: \"%3\"\n\n" ..
+            "Answer in %4:\n" ..
+            "1) Explain the general meaning of the word or phrase (add synonyms when useful).\n" ..
+            "2) Explain its precise meaning in this specific context, taking the surrounding text into account.\n" ..
+            "Be concise and clear. Do not ask questions.",
+            self:getBookDescription(), selection, context, config.language
+        )
+    end
+
+    -- Estilo diccionario: entrada estructurada con negritas y cursiva, que el
+    -- plugin convierte despues a HTML para que KOReader lo renderice. El
+    -- esqueleto se construye con las etiquetas ya en el idioma de respuesta
+    -- (DICTIONARY_LABELS) para que el modelo no las deje en ingles.
+    local labels = DICTIONARY_LABELS[config.language] or DICTIONARY_LABELS.English
+    local function label(index)
+        -- Escape de "%" para que no lo interprete la plantilla T().
+        return (labels[index]:gsub("%%", "%%%%"))
+    end
+
     return T(
         "%1Selected word or phrase: \"%2\"\n" ..
         "Context where it appears in the book: \"%3\"\n\n" ..
-        "Answer in %4:\n" ..
-        "1) Explain the general meaning of the word or phrase (add synonyms when useful).\n" ..
-        "2) Explain its precise meaning in this specific context, taking the surrounding text into account.\n" ..
-        "Be concise and clear. Do not ask questions.",
+        "Write a dictionary entry for \"%2\". Write the whole answer in %4, "
+        .. "using Markdown with only **bold** and *italic*. Keep the field names "
+        .. "exactly as shown and fill in the values in %4. Follow exactly this "
+        .. "structure, one line per field and no extra sections:\n\n"
+        .. "**%2**\n"
+        .. "- **" .. label(3) .. ":** ...\n"
+        .. "- **" .. label(1) .. ":** ...\n"
+        .. "- **" .. label(2) .. ":** ... (omit this line if not relevant)\n"
+        .. "- **" .. label(6) .. ":** *\"...\"*\n"
+        .. "- **" .. label(5) .. ":** ...\n"
+        .. "- **" .. label(4) .. ":** ...\n\n"
+        .. "Be concise and objective. Do not ask questions.",
         self:getBookDescription(), selection, context, config.language
     )
 end
@@ -240,10 +379,12 @@ function AILookup:queryModel(config, prompt)
         messages = {
             {
                 role = "system",
-                content = "You are a helpful reading assistant and dictionary. "
-                    .. "Answer in plain text only: do not use Markdown or any formatting "
-                    .. "syntax (no asterisks, hashes, underscores or backticks). "
-                    .. "Answer clearly and concisely.",
+                content = "You are a precise reading assistant and dictionary. "
+                    .. "Always answer in the language the user asks for. "
+                    .. "Format your answer with Markdown, but use only **bold**, "
+                    .. "*italic* and '- ' bullet lists. Do not use headings (#), "
+                    .. "tables, code blocks, backticks or links. "
+                    .. "Be concise and objective.",
             },
             {
                 role = "user",
@@ -398,10 +539,14 @@ function AILookup:lookup(reader_highlight)
 end
 
 function AILookup:showResult(selection, text)
-    text = strip_markdown(text)
-    if #text > MAX_ANSWER_CHARS then
-        text = text:sub(1, MAX_ANSWER_CHARS) .. "…"
+    local plain = markdown_to_plain(text)
+    if #plain > MAX_ANSWER_CHARS then
+        -- Truncamos primero el texto plano y convertimos despues, para no
+        -- cortar a mitad de una etiqueta HTML.
+        plain = plain:sub(1, MAX_ANSWER_CHARS) .. "…"
+        text = plain
     end
+    local html = markdown_to_html(text)
 
     local buttons_table = nil
     if Device:hasClipboard() then
@@ -409,7 +554,7 @@ function AILookup:showResult(selection, text)
             {
                 text = _("Copy"),
                 callback = function()
-                    Device.input.setClipboardText(text)
+                    Device.input.setClipboardText(plain)
                     UIManager:show(InfoMessage:new{ text = _("Copied to clipboard.") })
                 end,
             },
@@ -419,8 +564,8 @@ function AILookup:showResult(selection, text)
     UIManager:show(TextViewer:new{
         title = _("AI Lookup") .. ": " .. capitalize_first(selection),
         title_multilines = true,
-        text = text,
-        justified = true,
+        text = html,
+        text_format = "html",
         add_default_buttons = true,
         buttons_table = buttons_table,
     })
@@ -477,6 +622,27 @@ function AILookup:addToMainMenu(menu_items)
                 keep_menu_open = true,
                 callback = function(touchmenu_instance)
                     self:showLanguagePicker(touchmenu_instance)
+                end,
+            },
+            {
+                text_func = function()
+                    local style = self:getConfig().answer_style
+                    return T(_("Answer style: %1"), style == "explanation"
+                        and _("Explanation") or _("Dictionary"))
+                end,
+                callback = function(touchmenu_instance)
+                    local new_style = self:getConfig().answer_style == "explanation"
+                        and "dictionary" or "explanation"
+                    self.settings:saveSetting("answer_style", new_style)
+                    self.settings:flush()
+                    UIManager:show(InfoMessage:new{
+                        text = new_style == "dictionary"
+                            and _("Answer style set to dictionary.")
+                            or _("Answer style set to explanation."),
+                    })
+                    if touchmenu_instance then
+                        touchmenu_instance:updateItems()
+                    end
                 end,
             },
             {
