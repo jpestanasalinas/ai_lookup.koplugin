@@ -22,4 +22,8 @@ return {
 
     -- Numero de palabras de contexto antes y despues de la seleccion.
     context_words = 40,
+
+    -- Estilo de la respuesta: "dictionary" (entrada de diccionario) o
+    -- "explanation" (explicacion general + contextual).
+    answer_style = "dictionary",
 }
