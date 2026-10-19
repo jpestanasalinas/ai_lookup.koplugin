@@ -59,6 +59,46 @@ local LANGUAGES = {
     "Thai",
 }
 
+-- Etiquetas de los campos de la entrada de diccionario, en el orden:
+-- categoria gramatical, etimologia, definicion, sentido en contexto,
+-- sinonimos y ejemplo. Se usan para construir el esqueleto del prompt en el
+-- idioma de respuesta: asi el modelo no tiene que traducir los nombres de los
+-- campos (los copia tal cual) y nunca los deja en ingles. Si el idioma no esta
+-- en la tabla se usan las etiquetas en ingles.
+local DICTIONARY_LABELS = {
+    English = { "Part of speech", "Etymology / origin", "Definition", "Meaning in this context", "Synonyms", "Example" },
+    Spanish = { "Categoría gramatical", "Etimología / Origen", "Definición", "Sentido en este contexto", "Sinónimos", "Ejemplo" },
+    French = { "Catégorie grammaticale", "Étymologie", "Définition", "Sens dans ce contexte", "Synonymes", "Exemple" },
+    German = { "Wortart", "Etymologie", "Definition", "Bedeutung in diesem Kontext", "Synonyme", "Beispiel" },
+    Italian = { "Categoria grammaticale", "Etimologia", "Definizione", "Significato in questo contesto", "Sinonimi", "Esempio" },
+    Portuguese = { "Classe gramatical", "Etimologia", "Definição", "Sentido neste contexto", "Sinônimos", "Exemplo" },
+    Dutch = { "Woordsoort", "Etymologie", "Definitie", "Betekenis in deze context", "Synoniemen", "Voorbeeld" },
+    Polish = { "Część mowy", "Etymologia", "Definicja", "Znaczenie w tym kontekście", "Synonimy", "Przykład" },
+    Russian = { "Часть речи", "Этимология", "Определение", "Значение в этом контексте", "Синонимы", "Пример" },
+    Ukrainian = { "Частина мови", "Етимологія", "Визначення", "Значення в цьому контексті", "Синоніми", "Приклад" },
+    Turkish = { "Sözcük türü", "Etimoloji", "Tanım", "Bu bağlamdaki anlamı", "Eş anlamlılar", "Örnek" },
+    Arabic = { "نوع الكلمة", "أصل الكلمة", "التعريف", "المعنى في هذا السياق", "المترادفات", "مثال" },
+    Chinese = { "词类", "词源", "释义", "在上下文中的含义", "同义词", "例句" },
+    Japanese = { "品詞", "語源", "定義", "この文脈での意味", "類義語", "例文" },
+    Korean = { "품사", "어원", "정의", "이 문맥에서의 의미", "동의어", "예문" },
+    Hindi = { "शब्द-वर्ग", "व्युत्पत्ति", "परिभाषा", "इस संदर्भ में अर्थ", "पर्यायवाची", "उदाहरण" },
+    Catalan = { "Categoria gramatical", "Etimologia", "Definició", "Sentit en aquest context", "Sinònims", "Exemple" },
+    Galician = { "Categoría gramatical", "Etimoloxía", "Definición", "Sentido neste contexto", "Sinónimos", "Exemplo" },
+    Basque = { "Hitz klasea", "Etimologia", "Definizioa", "Testuinguru honetako esanahia", "Sinonimoak", "Adibidea" },
+    Swedish = { "Ordklass", "Etymologi", "Definition", "Betydelse i detta sammanhang", "Synonymer", "Exempel" },
+    Norwegian = { "Ordklasse", "Etymologi", "Definisjon", "Betydning i denne konteksten", "Synonymer", "Eksempel" },
+    Danish = { "Ordklasse", "Etymologi", "Definition", "Betydning i denne kontekst", "Synonymer", "Eksempel" },
+    Finnish = { "Sanaluokka", "Etymologia", "Määritelmä", "Merkitys tässä yhteydessä", "Synonyymit", "Esimerkki" },
+    Czech = { "Slovní druh", "Etymologie", "Definice", "Význam v tomto kontextu", "Synonyma", "Příklad" },
+    Greek = { "Μέρος του λόγου", "Ετυμολογία", "Ορισμός", "Σημασία σε αυτό το πλαίσιο", "Συνώνυμα", "Παράδειγμα" },
+    Romanian = { "Parte de vorbire", "Etimologie", "Definiție", "Sensul în acest context", "Sinonime", "Exemplu" },
+    Hungarian = { "Szófaj", "Etimológia", "Meghatározás", "Jelentés ebben a kontextusban", "Szinonimák", "Példa" },
+    Hebrew = { "חלק דיבר", "אטימולוגיה", "הגדרה", "משמעות בהקשר זה", "מילים נרדפות", "דוגמה" },
+    Indonesian = { "Kelas kata", "Etimologi", "Definisi", "Makna dalam konteks ini", "Sinonim", "Contoh" },
+    Vietnamese = { "Từ loại", "Từ nguyên", "Định nghĩa", "Nghĩa trong ngữ cảnh này", "Từ đồng nghĩa", "Ví dụ" },
+    Thai = { "ชนิดของคำ", "รากศัพท์", "ความหมาย", "ความหมายในบริบทนี้", "คำพ้องความหมาย", "ตัวอย่าง" },
+}
+
 local REQUEST_BLOCK_TIMEOUT = 30
 local REQUEST_TOTAL_TIMEOUT = 90
 local MAX_ANSWER_CHARS = 4000
@@ -304,20 +344,29 @@ function AILookup:buildUserPrompt(config, selection, before, after)
     end
 
     -- Estilo diccionario: entrada estructurada con negritas y cursiva, que el
-    -- plugin convierte despues a HTML para que KOReader lo renderice.
+    -- plugin convierte despues a HTML para que KOReader lo renderice. El
+    -- esqueleto se construye con las etiquetas ya en el idioma de respuesta
+    -- (DICTIONARY_LABELS) para que el modelo no las deje en ingles.
+    local labels = DICTIONARY_LABELS[config.language] or DICTIONARY_LABELS.English
+    local function label(index)
+        -- Escape de "%" para que no lo interprete la plantilla T().
+        return (labels[index]:gsub("%%", "%%%%"))
+    end
+
     return T(
         "%1Selected word or phrase: \"%2\"\n" ..
         "Context where it appears in the book: \"%3\"\n\n" ..
-        "Write a dictionary entry for \"%2\" in %4, using Markdown formatting "
-        .. "(only **bold** and *italic*). Follow exactly this structure, with one "
-        .. "line per field and no extra sections:\n\n"
+        "Write a dictionary entry for \"%2\". Write the whole answer in %4, "
+        .. "using Markdown with only **bold** and *italic*. Keep the field names "
+        .. "exactly as shown and fill in the values in %4. Follow exactly this "
+        .. "structure, one line per field and no extra sections:\n\n"
         .. "**%2**\n"
-        .. "- **Part of speech:** ...\n"
-        .. "- **Etymology / origin:** ... (omit this line if not relevant)\n"
-        .. "- **Definition:** ...\n"
-        .. "- **Meaning in this context:** ...\n"
-        .. "- **Synonyms:** ...\n"
-        .. "- **Example:** *\"...\"*\n\n"
+        .. "- **" .. label(3) .. ":** ...\n"
+        .. "- **" .. label(1) .. ":** ...\n"
+        .. "- **" .. label(2) .. ":** ... (omit this line if not relevant)\n"
+        .. "- **" .. label(6) .. ":** *\"...\"*\n"
+        .. "- **" .. label(5) .. ":** ...\n"
+        .. "- **" .. label(4) .. ":** ...\n\n"
         .. "Be concise and objective. Do not ask questions.",
         self:getBookDescription(), selection, context, config.language
     )
@@ -331,6 +380,7 @@ function AILookup:queryModel(config, prompt)
             {
                 role = "system",
                 content = "You are a precise reading assistant and dictionary. "
+                    .. "Always answer in the language the user asks for. "
                     .. "Format your answer with Markdown, but use only **bold**, "
                     .. "*italic* and '- ' bullet lists. Do not use headings (#), "
                     .. "tables, code blocks, backticks or links. "
