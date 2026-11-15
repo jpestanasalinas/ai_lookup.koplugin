@@ -48,6 +48,9 @@ local DEFAULT_CONTEXT_WORDS = 40
 -- Estilo de la respuesta: "dictionary" (entrada de diccionario) o
 -- "explanation" (explicacion general + contextual, comportamiento original).
 local DEFAULT_ANSWER_STYLE = "dictionary"
+-- Formato de salida: "html" (renderizado con negritas/cursiva/listas) o
+-- "plain" (texto plano), util cuando el visor muestra etiquetas HTML en crudo.
+local DEFAULT_OUTPUT_FORMAT = "html"
 
 -- Idiomas comunes ofrecidos en el selector de idioma de respuesta.
 local LANGUAGES = {
@@ -302,6 +305,7 @@ function AILookup:getConfig()
         language = pick("language", DEFAULT_LANGUAGE),
         context_words = pick("context_words", DEFAULT_CONTEXT_WORDS),
         answer_style = pick("answer_style", DEFAULT_ANSWER_STYLE),
+        output_format = pick("output_format", DEFAULT_OUTPUT_FORMAT),
     }
 end
 
@@ -539,14 +543,20 @@ function AILookup:lookup(reader_highlight)
 end
 
 function AILookup:showResult(selection, text)
+    local output_format = self:getConfig().output_format
     local plain = markdown_to_plain(text)
     if #plain > MAX_ANSWER_CHARS then
-        -- Truncamos primero el texto plano y convertimos despues, para no
-        -- cortar a mitad de una etiqueta HTML.
         plain = plain:sub(1, MAX_ANSWER_CHARS) .. "…"
         text = plain
     end
-    local html = markdown_to_html(text)
+
+    local display_text, text_format
+    if output_format == "plain" then
+        display_text = plain
+    else
+        display_text = markdown_to_html(text)
+        text_format = "html"
+    end
 
     local buttons_table = nil
     if Device:hasClipboard() then
@@ -564,8 +574,8 @@ function AILookup:showResult(selection, text)
     UIManager:show(TextViewer:new{
         title = _("AI Lookup") .. ": " .. capitalize_first(selection),
         title_multilines = true,
-        text = html,
-        text_format = "html",
+        text = display_text,
+        text_format = text_format,
         add_default_buttons = true,
         buttons_table = buttons_table,
     })
@@ -639,6 +649,27 @@ function AILookup:addToMainMenu(menu_items)
                         text = new_style == "dictionary"
                             and _("Answer style set to dictionary.")
                             or _("Answer style set to explanation."),
+                    })
+                    if touchmenu_instance then
+                        touchmenu_instance:updateItems()
+                    end
+                end,
+            },
+            {
+                text_func = function()
+                    local fmt = self:getConfig().output_format
+                    return T(_("Output format: %1"), fmt == "plain"
+                        and _("Plain text") or _("Formatted"))
+                end,
+                callback = function(touchmenu_instance)
+                    local new_fmt = self:getConfig().output_format == "plain"
+                        and "html" or "plain"
+                    self.settings:saveSetting("output_format", new_fmt)
+                    self.settings:flush()
+                    UIManager:show(InfoMessage:new{
+                        text = new_fmt == "plain"
+                            and _("Output format set to plain text.")
+                            or _("Output format set to formatted."),
                     })
                     if touchmenu_instance then
                         touchmenu_instance:updateItems()

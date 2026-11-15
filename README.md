@@ -64,6 +64,9 @@ Opcionalmente, desde el mismo menú puedes cambiar:
 - **Answer style**: `Dictionary` (por defecto) pide la respuesta con forma de
   entrada de diccionario; `Explanation` recupera el estilo anterior (una
   explicación general y otra del contexto). Pulsa el botón para alternar.
+- **Output format**: `Formatted` (por defecto) muestra negritas, cursiva y
+  listas renderizadas; `Plain text` muestra texto sin formato. Útil si tu
+  dispositivo muestra etiquetas HTML en crudo (p. ej. algunos Kindle).
 - **Context words**: cuántas palabras de contexto se envían (por defecto 40).
 
 ### Alternativa: archivo de configuración

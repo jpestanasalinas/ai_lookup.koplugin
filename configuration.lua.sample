@@ -26,4 +26,8 @@ return {
     -- Estilo de la respuesta: "dictionary" (entrada de diccionario) o
     -- "explanation" (explicacion general + contextual).
     answer_style = "dictionary",
+
+    -- Formato de salida: "html" (negritas/cursiva/listas renderizadas) o
+    -- "plain" (texto plano). Usa "plain" si tu dispositivo muestra etiquetas HTML.
+    output_format = "html",
 }
